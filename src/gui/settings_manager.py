@@ -38,16 +38,44 @@ class GUISettingsManager:
         self.settings = self.load_settings()
 
     def load_settings(self) -> Dict[str, Any]:
-        """Load settings from file"""
+        """Load and validate settings from file"""
         try:
             if self.settings_file.exists():
                 with open(self.settings_file, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                    # Merge with defaults to ensure all keys exist
-                    settings = self.defaults.copy()
-                    settings.update(loaded)
+                    # Check file size to prevent DoS
+                    import os
+                    if os.path.getsize(self.settings_file) > 1024 * 100:  # 100KB limit
+                        logger.warning("Settings file too large, using defaults")
+                        return self.defaults.copy()
+
+                    try:
+                        loaded = json.load(f)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Invalid JSON in settings file: {e}")
+                        return self.defaults.copy()
+
+                    # Validate loaded data structure
+                    if not isinstance(loaded, dict):
+                        logger.warning("Settings file is not a JSON object")
+                        return self.defaults.copy()
+
+                    # Validate each setting
+                    validated = self.defaults.copy()
+                    for key, value in loaded.items():
+                        if key not in self.defaults:
+                            logger.warning(f"Unknown setting: {key}")
+                            continue
+
+                        # Type validation
+                        default_type = type(self.defaults[key])
+                        if value is not None and not isinstance(value, (type(None), default_type)):
+                            logger.warning(f"Invalid type for {key}, using default")
+                            continue
+
+                        validated[key] = value
+
                     logger.info("GUI settings loaded")
-                    return settings
+                    return validated
         except Exception as e:
             logger.warning(f"Failed to load settings: {e}")
 

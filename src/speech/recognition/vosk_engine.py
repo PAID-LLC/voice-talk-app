@@ -66,27 +66,48 @@ class VoskEngine:
 
         try:
             if self.recognizer.AcceptWaveform(audio_data):
-                result = json.loads(self.recognizer.Result())
-                text = result.get("result", [])
-                text_str = " ".join([item.get("conf", "") for item in text])
+                try:
+                    result = json.loads(self.recognizer.Result())
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON from Vosk: {e}")
+                    return "", 0.0
 
-                # Extract confidence from full result
-                confidence = 0.9 if text else 0.0
+                # Extract text from result array
+                text_items = result.get("result", [])
+                if text_items and isinstance(text_items, list):
+                    # Join words from recognized phrases
+                    text_str = " ".join([item.get("result", "") for item in text_items if "result" in item])
+                    confidence = 0.9 if text_str else 0.0
+                else:
+                    text_str = ""
+                    confidence = 0.0
 
             else:
-                result = json.loads(self.recognizer.PartialResult())
-                text_str = result.get("result", [])
+                try:
+                    result = json.loads(self.recognizer.PartialResult())
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON from Vosk: {e}")
+                    return "", 0.0
+
+                # Partial result might have different structure
+                text_items = result.get("result", [])
+                text_str = " ".join([item.get("result", "") for item in text_items if "result" in item]) if text_items else ""
                 confidence = 0.0
 
-            return text_str if text_str else "", confidence
+            return text_str, confidence
 
         except Exception as e:
             logger.error(f"Error transcribing with Vosk: {e}")
             return "", 0.0
 
-    def transcribe_stream(self, frames):
+    def transcribe_stream(self, frames, max_frames: int = 1000, timeout_seconds: float = 300):
         """
         Transcribe audio stream (generator)
+
+        Args:
+            frames: Generator/iterable of audio frame bytes
+            max_frames: Maximum frames to process (prevents DoS)
+            timeout_seconds: Maximum duration for stream processing
 
         Yields:
             Transcribed text chunks
@@ -95,15 +116,40 @@ class VoskEngine:
             logger.error("Vosk engine not initialized")
             return
 
+        import time
+        start_time = time.time()
+        frame_count = 0
+
         try:
             for data in frames:
-                if isinstance(data, bytes):
-                    self.recognizer.AcceptWaveform(data)
-                    result = json.loads(self.recognizer.Result())
+                # Check resource limits
+                if frame_count >= max_frames:
+                    logger.warning(f"Frame limit exceeded ({max_frames})")
+                    break
 
-                    if "result" in result and result["result"]:
-                        text = " ".join([item["conf"] for item in result["result"]])
-                        yield text
+                if time.time() - start_time > timeout_seconds:
+                    logger.warning(f"Stream processing timeout exceeded ({timeout_seconds}s)")
+                    break
+
+                if isinstance(data, bytes):
+                    try:
+                        self.recognizer.AcceptWaveform(data)
+                        result = json.loads(self.recognizer.Result())
+
+                        if "result" in result and result["result"]:
+                            # Extract text properly (not "conf")
+                            text = " ".join([item.get("result", "") for item in result["result"] if "result" in item])
+                            if text:
+                                yield text
+
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Invalid JSON from Vosk stream: {e}")
+                        continue
+                    except Exception as e:
+                        logger.error(f"Error processing stream frame: {e}")
+                        continue
+
+                frame_count += 1
 
         except Exception as e:
             logger.error(f"Error in stream transcription: {e}")

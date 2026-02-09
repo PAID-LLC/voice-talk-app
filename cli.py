@@ -323,5 +323,33 @@ def server():
         click.secho(f"Error starting server: {e}", fg="red")
 
 
+@cli.command()
+def gui():
+    """Launch the PyQt6 graphical user interface"""
+    click.secho("\nLaunching Voice Talk GUI Application...", fg="green")
+
+    try:
+        # Import and run the GUI
+        from src.gui.main_window import MainWindow
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication(sys.argv)
+        app.setApplicationName("Voice Talk Application")
+        app.setApplicationVersion("0.1.0")
+
+        window = MainWindow()
+        window.show()
+
+        click.secho("✓ GUI application launched", fg="green")
+        sys.exit(app.exec())
+
+    except ImportError as e:
+        click.secho(f"Error: PyQt6 is not installed. Please run: pip install PyQt6", fg="red")
+        logger.error(f"PyQt6 import error: {e}")
+    except Exception as e:
+        click.secho(f"Error launching GUI: {e}", fg="red")
+        logger.error(f"GUI launch error: {e}")
+
+
 if __name__ == "__main__":
     cli()

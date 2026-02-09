@@ -2,6 +2,7 @@
 
 import subprocess
 import json
+import webbrowser
 from typing import Dict, Optional, Tuple
 from enum import Enum
 
@@ -94,11 +95,17 @@ class CommandRegistry:
             requires_confirmation=True
         ))
 
-        # Web search command (would open browser)
+        # Web search command (safely open browser)
         def web_search(query: str) -> Tuple[bool, str]:
             try:
-                url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-                subprocess.Popen(f"start {url}", shell=True)
+                # Safely construct URL with proper URL encoding
+                import urllib.parse
+                encoded_query = urllib.parse.quote(query)
+                url = f"https://www.google.com/search?q={encoded_query}"
+
+                # Use webbrowser module instead of shell=True (safe, no command injection)
+                webbrowser.open(url)
+
                 logger.info(f"Opened web search: {query}")
                 return True, f"Searching for {query}"
             except Exception as e:

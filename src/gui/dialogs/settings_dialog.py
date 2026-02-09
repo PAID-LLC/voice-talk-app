@@ -224,24 +224,84 @@ class SettingsDialog(QDialog):
                     "HuggingFace API returned an error. Please check your API key."
                 )
         except Exception as e:
+            logger.exception(f"API test failed for HuggingFace")
             QMessageBox.critical(
                 self, "API Test Error",
-                f"Failed to test API:\n\n{str(e)}"
+                "Failed to test API connection. Please verify your API key and try again."
             )
 
     def save_settings(self):
-        """Save settings to file"""
+        """Save settings to file with validation"""
         try:
+            # Validate numeric ranges
+            volume = self.volume_spin.value()
+            if not (0 <= volume <= 100):
+                QMessageBox.warning(self, "Invalid Volume", "Volume must be between 0 and 100")
+                return
+
+            font_size = self.font_size_spin.value()
+            if not (8 <= font_size <= 24):
+                QMessageBox.warning(self, "Invalid Font Size", "Font size must be between 8 and 24")
+                return
+
+            # Validate Azure region if provided
+            azure_region = self.azure_region_input.text().strip()
+            if azure_region:
+                valid_regions = ["eastus", "westus", "centralus", "northcentralus", "southcentralus",
+                               "westeurope", "northeurope", "eastasia", "southeastasia", "japaneast",
+                               "japanwest", "australiaeast", "australiasoutheast", "canadacentral",
+                               "canadaeast", "uksouth", "ukwest", "francecentral"]
+                if azure_region.lower() not in valid_regions:
+                    QMessageBox.warning(
+                        self, "Invalid Region",
+                        f"Invalid Azure region. Choose from: {', '.join(valid_regions[:5])}, etc."
+                    )
+                    return
+
+            # Validate theme selection
+            theme = self.theme_combo.currentText().lower()
+            if theme not in ["light", "dark"]:
+                QMessageBox.warning(self, "Invalid Theme", "Theme must be Light or Dark")
+                return
+
+            # Validate Google credentials file if provided
+            google_file = self.google_file_input.text().strip()
+            if google_file:
+                try:
+                    import json
+                    from pathlib import Path
+                    with open(google_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    # Verify it has expected Google Cloud structure
+                    if 'type' not in data or 'project_id' not in data:
+                        QMessageBox.warning(
+                            self, "Invalid Credentials",
+                            "Not a valid Google Cloud credentials file"
+                        )
+                        return
+                except json.JSONDecodeError:
+                    QMessageBox.warning(
+                        self, "Invalid JSON",
+                        "Google credentials file is not valid JSON"
+                    )
+                    return
+                except FileNotFoundError:
+                    QMessageBox.warning(
+                        self, "File Not Found",
+                        "Google credentials file does not exist"
+                    )
+                    return
+
             settings = {
-                "theme": self.theme_combo.currentText().lower(),
-                "chat_font_size": self.font_size_spin.value(),
+                "theme": theme,
+                "chat_font_size": font_size,
                 "auto_save": self.autosave_check.isChecked(),
                 "show_timestamps": self.timestamps_check.isChecked(),
                 "minimize_to_tray": self.tray_check.isChecked(),
                 "audio_input_device": self.input_device_combo.currentData(),
                 "audio_output_device": self.output_device_combo.currentData(),
                 "sample_rate": int(self.sample_rate_combo.currentText()),
-                "volume": self.volume_spin.value(),
+                "volume": volume,
             }
 
             self.gui_settings.save_settings(settings)
@@ -255,7 +315,7 @@ class SettingsDialog(QDialog):
             logger.error(f"Error saving settings: {e}")
             QMessageBox.critical(
                 self, "Save Error",
-                f"Failed to save settings:\n\n{str(e)}"
+                "Failed to save settings. Please try again."
             )
 
     def load_settings_into_ui(self):

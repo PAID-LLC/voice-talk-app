@@ -90,14 +90,28 @@ def install_dependencies():
         import poetry
         print("\n✓ Poetry is installed")
         print("\nRunning: poetry install")
-        os.system("poetry install")
 
-    except ImportError:
+        # Use subprocess.run instead of os.system for better security
+        result = subprocess.run(["poetry", "install"], check=False)
+        if result.returncode != 0:
+            print("! Poetry install failed, trying pip instead")
+            result = subprocess.run(["pip", "install", "-r", "requirements.txt"], check=False)
+            if result.returncode != 0:
+                print("! Dependency installation failed")
+                return False
+
+    except (ImportError, FileNotFoundError):
         print("\n! Poetry not found, using pip instead")
         print("\nRunning: pip install -r requirements.txt")
-        os.system("pip install -r requirements.txt")
+
+        # Use subprocess.run instead of os.system for better security
+        result = subprocess.run(["pip", "install", "-r", "requirements.txt"], check=False)
+        if result.returncode != 0:
+            print("! Dependency installation failed")
+            return False
 
     print("\n✓ Dependencies installed")
+    return True
 
 
 def create_directories():
