@@ -12,6 +12,7 @@ from src.config.logger import get_logger
 from src.config.settings import get_settings
 from src.audio.capture import AudioCapture
 from src.audio.playback import AudioPlayback
+from src.gui.settings_manager import get_gui_settings
 
 logger = get_logger(__name__)
 
@@ -23,7 +24,9 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Advanced Settings")
         self.setGeometry(200, 200, 600, 500)
+        self.gui_settings = get_gui_settings()
         self.setup_ui()
+        self.load_settings_into_ui()
 
     def setup_ui(self):
         """Setup settings dialog UI"""
@@ -227,8 +230,75 @@ class SettingsDialog(QDialog):
             )
 
     def save_settings(self):
-        """Save settings"""
-        QMessageBox.information(self, "Settings Saved",
-                              "Settings have been saved!\n\n"
-                              "Settings persistence coming soon!")
-        self.accept()
+        """Save settings to file"""
+        try:
+            settings = {
+                "theme": self.theme_combo.currentText().lower(),
+                "chat_font_size": self.font_size_spin.value(),
+                "auto_save": self.autosave_check.isChecked(),
+                "show_timestamps": self.timestamps_check.isChecked(),
+                "minimize_to_tray": self.tray_check.isChecked(),
+                "audio_input_device": self.input_device_combo.currentData(),
+                "audio_output_device": self.output_device_combo.currentData(),
+                "sample_rate": int(self.sample_rate_combo.currentText()),
+                "volume": self.volume_spin.value(),
+            }
+
+            self.gui_settings.save_settings(settings)
+
+            QMessageBox.information(
+                self, "Settings Saved",
+                "✓ All settings have been saved successfully!"
+            )
+            self.accept()
+        except Exception as e:
+            logger.error(f"Error saving settings: {e}")
+            QMessageBox.critical(
+                self, "Save Error",
+                f"Failed to save settings:\n\n{str(e)}"
+            )
+
+    def load_settings_into_ui(self):
+        """Load settings from file into UI"""
+        try:
+            # Load theme
+            theme = self.gui_settings.get("theme", "light")
+            theme_index = self.theme_combo.findText(theme.capitalize())
+            if theme_index >= 0:
+                self.theme_combo.setCurrentIndex(theme_index)
+
+            # Load font size
+            font_size = self.gui_settings.get("chat_font_size", 10)
+            self.font_size_spin.setValue(font_size)
+
+            # Load checkboxes
+            self.autosave_check.setChecked(self.gui_settings.get("auto_save", True))
+            self.timestamps_check.setChecked(self.gui_settings.get("show_timestamps", True))
+            self.tray_check.setChecked(self.gui_settings.get("minimize_to_tray", True))
+
+            # Load audio settings
+            input_device = self.gui_settings.get("audio_input_device", -1)
+            output_device = self.gui_settings.get("audio_output_device", -1)
+            sample_rate = self.gui_settings.get("sample_rate", 16000)
+            volume = self.gui_settings.get("volume", 90)
+
+            # Set audio device combo boxes
+            for i in range(self.input_device_combo.count()):
+                if self.input_device_combo.itemData(i) == input_device:
+                    self.input_device_combo.setCurrentIndex(i)
+                    break
+
+            for i in range(self.output_device_combo.count()):
+                if self.output_device_combo.itemData(i) == output_device:
+                    self.output_device_combo.setCurrentIndex(i)
+                    break
+
+            sample_rate_index = self.sample_rate_combo.findText(str(sample_rate))
+            if sample_rate_index >= 0:
+                self.sample_rate_combo.setCurrentIndex(sample_rate_index)
+
+            self.volume_spin.setValue(volume)
+
+            logger.info("Settings loaded into UI")
+        except Exception as e:
+            logger.warning(f"Error loading settings into UI: {e}")

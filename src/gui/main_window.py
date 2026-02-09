@@ -24,6 +24,9 @@ from src.speech.synthesis.pyttsx3_engine import get_pyttsx3_engine
 from src.speech.recognition.vosk_engine import get_vosk_engine
 from src.ai.conversation.huggingface_client import get_huggingface_client
 from src.ai.quota_manager import get_quota_manager
+from src.gui.settings_manager import get_gui_settings
+from src.gui.styles.themes import get_stylesheet
+from src.gui.dialogs.settings_dialog import SettingsDialog
 
 logger = get_logger(__name__)
 
@@ -155,6 +158,7 @@ class MainWindow(QMainWindow):
 
         # Initialize components
         self.settings = get_settings()
+        self.gui_settings = get_gui_settings()
         self.tts_engine = get_pyttsx3_engine()
         self.quota_manager = get_quota_manager()
         self.conversation_history = []
@@ -339,28 +343,11 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(main_layout)
 
     def setup_styles(self):
-        """Setup application styles"""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            QTextEdit {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                padding: 5px;
-            }
-            QLabel {
-                color: #333;
-                font-size: 10pt;
-            }
-            QComboBox {
-                background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                padding: 5px;
-            }
-        """)
+        """Setup application styles based on saved theme"""
+        theme = self.gui_settings.get("theme", "light")
+        stylesheet = get_stylesheet(theme)
+        self.setStyleSheet(stylesheet)
+        logger.info(f"Applied theme: {theme}")
 
     def setup_status_bar(self):
         """Setup the status bar"""
@@ -509,9 +496,13 @@ class MainWindow(QMainWindow):
 
     def open_settings(self):
         """Open settings dialog"""
-        QMessageBox.information(self, "Settings",
-                              "Advanced settings dialog coming soon!\n\n"
-                              "For now, use .env file to configure API keys")
+        dialog = SettingsDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Reload theme if changed
+            theme = self.gui_settings.get("theme", "light")
+            stylesheet = get_stylesheet(theme)
+            self.setStyleSheet(stylesheet)
+            logger.info("Settings applied")
 
     def show_window(self):
         """Show window from tray"""
